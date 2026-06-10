@@ -39,7 +39,17 @@ function sendLog(message, level = 'info') {
 
 // Custom logger to pipe matter.js internal logs to frontend
 Logger.log = (level, facility, message) => {
-  sendLog(`[${facility}] ${message}`, level.toLowerCase());
+  let levelStr = 'info';
+  if (level !== undefined && level !== null) {
+    if (typeof level === 'string') {
+      levelStr = level.toLowerCase();
+    } else if (level.name && typeof level.name === 'string') {
+      levelStr = level.name.toLowerCase();
+    } else {
+      levelStr = String(level).toLowerCase();
+    }
+  }
+  sendLog(`[${facility}] ${message}`, levelStr);
 };
 
 function createWindow() {
