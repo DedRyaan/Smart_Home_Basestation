@@ -1,0 +1,26 @@
+{
+  "name": "smart-home-laptop-basestation",
+  "version": "1.0.0",
+  "description": "Smart Home Laptop Basestation Matter Controller",
+  "main": "electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "electron:dev": "electron .",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@matter/main": "^0.17.2",
+    "@project-chip/matter.js": "^0.17.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.0.1",
+    "vite": "^5.3.1"
+  }
+}
