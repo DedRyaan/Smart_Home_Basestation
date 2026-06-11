@@ -8,7 +8,23 @@
     "dev": "vite",
     "electron:dev": "electron .",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "package": "npm run build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.dedryaan.smarthomebasestation",
+    "productName": "Smart Home Basestation",
+    "directories": {
+      "output": "C:\\Users\\shaik\\.gemini\\antigravity-ide\\scratch\\release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable"
+    }
   },
   "dependencies": {
     "@matter/main": "^0.17.2",
@@ -21,6 +37,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "electron": "^31.0.1",
+    "electron-builder": "^26.15.2",
     "vite": "^5.3.1"
   }
 }

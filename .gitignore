@@ -4,3 +4,5 @@ dist/
 *.log
 .matter/
 temp-controller-template/
+release/
+
