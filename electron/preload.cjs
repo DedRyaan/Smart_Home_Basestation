@@ -4,7 +4,6 @@ contextBridge.exposeInMainWorld('api', {
   discoverDevices: () => ipcRenderer.send('matter:discover'),
   commissionDevice: (pairingCode) => ipcRenderer.send('matter:commission', pairingCode),
   toggleRelay: (channel, state) => ipcRenderer.send('matter:control:relay', { channel, state }),
-  setFanSpeed: (percent) => ipcRenderer.send('matter:control:fanSpeed', percent),
   setAcState: (state) => ipcRenderer.send('matter:control:ac', state),
   decommissionDevice: () => ipcRenderer.send('matter:decommission'),
   

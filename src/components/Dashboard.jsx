@@ -3,18 +3,6 @@ import CircularSlider from './CircularSlider';
 
 export default function Dashboard({ state, logs, onDecommission }) {
   const [logsCollapsed, setLogsCollapsed] = useState(false);
-  const [tempHistory, setTempHistory] = useState([25.5, 25.4, 25.5, 25.6, 25.5, 25.4, 25.6, 25.5, 25.5, 25.5]);
-
-  // Record temperature history for trend line
-  useEffect(() => {
-    if (state.ambientTemp !== undefined) {
-      setTempHistory(prev => {
-        const next = [...prev, state.ambientTemp];
-        if (next.length > 20) next.shift(); // Keep last 20 samples
-        return next;
-      });
-    }
-  }, [state.ambientTemp]);
 
   const handleLightToggle = (channel, currentState) => {
     window.api.toggleRelay(channel, !currentState);
@@ -22,15 +10,6 @@ export default function Dashboard({ state, logs, onDecommission }) {
 
   const handleFanToggle = (currentPower) => {
     window.api.toggleRelay(3, !currentPower); // Fan is Relay 3
-  };
-
-  const handleFanSpeedChange = (e) => {
-    const val = parseInt(e.target.value, 10);
-    window.api.setFanSpeed(val);
-  };
-
-  const handleFanPreset = (presetSpeed) => {
-    window.api.setFanSpeed(presetSpeed);
   };
 
   const handleAcPower = (currentPower) => {
@@ -45,31 +24,10 @@ export default function Dashboard({ state, logs, onDecommission }) {
     window.api.setAcState({ fanSpeed: speed });
   };
 
-  // Generate SVG path for temperature trend sparkline
-  const generateSparklinePath = () => {
-    if (tempHistory.length < 2) return '';
-    const width = 250;
-    const height = 50;
-    const minVal = Math.min(...tempHistory) - 0.2;
-    const maxVal = Math.max(...tempHistory) + 0.2;
-    const valRange = maxVal - minVal || 1;
-
-    const points = tempHistory.map((val, idx) => {
-      const x = (idx / (tempHistory.length - 1)) * width;
-      const y = height - ((val - minVal) / valRange) * height;
-      return `${x},${y}`;
-    });
-
-    return `M ${points.join(' L ')}`;
-  };
-
   // Determine spin speed class
   let fanSpinClass = '';
-  if (state.fanPower && state.fanSpeed > 0) {
+  if (state.fanPower) {
     fanSpinClass = 'spinning';
-    if (state.fanSpeed > 66) fanSpinClass += ' fast';
-    else if (state.fanSpeed > 33) fanSpinClass += ' medium';
-    else fanSpinClass += ' slow';
   }
 
   return (
@@ -139,131 +97,26 @@ export default function Dashboard({ state, logs, onDecommission }) {
           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Matter Endpoint 4</span>
         </div>
 
-        <div className="fan-controller-body">
-          <div className="fan-toggle-section">
-            <div 
-              className={`fan-disc ${fanSpinClass}`}
-              onClick={() => handleFanToggle(state.fanPower)}
-            >
-              <span className="fan-blades">🌀</span>
-            </div>
-            <span style={{ fontSize: '12px', fontWeight: '600', color: state.fanPower ? 'var(--color-primary)' : 'var(--text-muted)' }}>
-              {state.fanPower ? 'RUNNING' : 'STOPPED'}
-            </span>
+        <div className="fan-controller-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '16px' }}>
+          <div 
+            className={`fan-disc ${fanSpinClass}`}
+            onClick={() => handleFanToggle(state.fanPower)}
+            style={{ width: '96px', height: '96px', margin: '10px 0' }}
+          >
+            <span className="fan-blades" style={{ fontSize: '36px' }}>🌀</span>
           </div>
-
-          <div className="fan-speed-section">
-            <div className="fan-slider-label">
-              <span>Speed Level</span>
-              <strong style={{ color: 'var(--color-primary)' }}>{state.fanPower ? `${state.fanSpeed}%` : 'OFF'}</strong>
-            </div>
-
-            <input
-              type="range"
-              className="range-slider"
-              min="0"
-              max="100"
-              step="10"
-              value={state.fanPower ? state.fanSpeed : 0}
-              onChange={handleFanSpeedChange}
-              disabled={!state.fanPower}
-            />
-
-            <div className="fan-presets">
-              <button 
-                className={`preset-btn ${!state.fanPower ? 'active' : ''}`}
-                onClick={() => handleFanPreset(0)}
-              >
-                Off
-              </button>
-              <button 
-                className={`preset-btn ${state.fanPower && state.fanSpeed <= 33 && state.fanSpeed > 0 ? 'active' : ''}`}
-                onClick={() => handleFanPreset(33)}
-                disabled={!state.fanPower}
-              >
-                Low
-              </button>
-              <button 
-                className={`preset-btn ${state.fanPower && state.fanSpeed > 33 && state.fanSpeed <= 66 ? 'active' : ''}`}
-                onClick={() => handleFanPreset(66)}
-                disabled={!state.fanPower}
-              >
-                Med
-              </button>
-              <button 
-                className={`preset-btn ${state.fanPower && state.fanSpeed > 66 ? 'active' : ''}`}
-                onClick={() => handleFanPreset(100)}
-                disabled={!state.fanPower}
-              >
-                High
-              </button>
-            </div>
-          </div>
+          <button 
+            className={`ac-power-btn ${state.fanPower ? 'active' : ''}`}
+            onClick={() => handleFanToggle(state.fanPower)}
+            style={{ width: '100%', maxWidth: '200px', textAlign: 'center' }}
+          >
+            {state.fanPower ? 'TURN OFF' : 'TURN ON'}
+          </button>
         </div>
       </div>
 
-      {/* 3. Ambient Environment Widget */}
-      <div className="widget-card glass-panel">
-        <div className="widget-title-bar">
-          <h3 className="widget-title">
-            <span className="widget-icon">🌡️</span> Environment
-          </h3>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Matter Endpoint 8</span>
-        </div>
-
-        <div className="env-container">
-          <div className="env-metric-box">
-            <div>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                Room Temperature
-              </span>
-              <div className="env-value-display">
-                {state.ambientTemp !== undefined ? state.ambientTemp.toFixed(1) : '25.5'}
-                <span className="env-unit">°C</span>
-              </div>
-            </div>
-            
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>
-                mDNS Status
-              </span>
-              <span style={{ 
-                fontSize: '12px', 
-                fontWeight: '600', 
-                color: state.connected ? 'var(--color-success)' : 'var(--color-error)'
-              }}>
-                {state.connected ? 'ONLINE' : 'OFFLINE'}
-              </span>
-            </div>
-          </div>
-
-          <div className="env-chart-wrapper">
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Live Temperature Trend (20s history)
-            </span>
-            <svg width="100%" height="40" style={{ overflow: 'visible' }}>
-              <path
-                d={generateSparklinePath()}
-                fill="none"
-                stroke="url(#sparklineGrad)"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ filter: 'drop-shadow(0 0 4px rgba(0, 242, 254, 0.4))' }}
-              />
-              <defs>
-                <linearGradient id="sparklineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#4facfe" />
-                  <stop offset="100%" stopColor="#00f2fe" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. AC Thermostat Control Widget */}
-      <div className="widget-card glass-panel" style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'row', gap: '30px', alignItems: 'center' }}>
+      {/* 3. AC Thermostat Control Widget */}
+      <div className="widget-card glass-panel" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'row', gap: '30px', alignItems: 'center' }}>
         <div style={{ flex: '1', display: 'flex', flexDirection: 'column' }}>
           <div className="widget-title-bar" style={{ marginBottom: '12px' }}>
             <h3 className="widget-title">
@@ -304,7 +157,7 @@ export default function Dashboard({ state, logs, onDecommission }) {
             
             <button 
               className="preset-btn"
-              style={{ flex: 'none', padding: '10px 18px', borderRadius: '20px', borderColor: 'rgba(239, 68, 68, 0.2)', color: 'var(--color-error)' }}
+              style={{ flex: 'none', padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(224, 122, 95, 0.2)', color: 'var(--color-error)', background: 'transparent' }}
               onClick={onDecommission}
             >
               Reset Pairing
@@ -323,11 +176,11 @@ export default function Dashboard({ state, logs, onDecommission }) {
         </div>
       </div>
 
-      {/* 5. Collapsible Developer Logs Widget */}
+      {/* 4. Collapsible Developer Logs Widget */}
       <div className={`logs-panel glass-panel ${logsCollapsed ? 'collapsed' : ''}`}>
         <div className="logs-header" onClick={() => setLogsCollapsed(!logsCollapsed)}>
           <div className="logs-title">
-            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#00f2fe', boxShadow: '0 0 8px #00f2fe' }}></span>
+            <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: 'var(--color-primary)', boxShadow: '0 0 6px var(--color-primary)' }}></span>
             Developer Matter Logs
           </div>
           <span className="logs-toggle-icon">▲</span>

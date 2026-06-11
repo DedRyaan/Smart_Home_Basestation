@@ -143,8 +143,8 @@ export default function CircularSlider({ value, min, max, onChange, disabled }) 
         
         <defs>
           <linearGradient id="activeGradiant" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#00f2fe" />
-            <stop offset="100%" stopColor="#4facfe" />
+            <stop offset="0%" stopColor="var(--color-primary)" />
+            <stop offset="100%" stopColor="var(--color-secondary)" />
           </linearGradient>
         </defs>
         
@@ -153,13 +153,13 @@ export default function CircularSlider({ value, min, max, onChange, disabled }) 
           <circle
             cx={thumbPos.x}
             cy={thumbPos.y}
-            r={10}
-            fill="#00f2fe"
-            stroke="#121026"
-            strokeWidth={3}
+            r={8}
+            fill="var(--color-primary)"
+            stroke="#08080a"
+            strokeWidth={2.5}
             style={{
               transition: isDragging ? 'none' : 'all 0.1s ease',
-              filter: 'drop-shadow(0 0 5px rgba(0, 242, 254, 0.8))'
+              filter: 'drop-shadow(0 0 5px var(--color-primary-glow))'
             }}
           />
         )}
@@ -187,7 +187,7 @@ export default function CircularSlider({ value, min, max, onChange, disabled }) 
             fontWeight: '700',
             color: disabled ? '#64748b' : '#f8fafc',
             lineHeight: 1,
-            textShadow: disabled ? 'none' : '0 0 20px rgba(0, 242, 254, 0.2)'
+            textShadow: disabled ? 'none' : '0 0 20px var(--color-primary-glow)'
           }}
         >
           {value}

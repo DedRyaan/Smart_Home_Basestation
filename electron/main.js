@@ -4,7 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 // We need to import classes from @matter/main and @project-chip/matter.js
-import { Environment, Logger, StorageService } from '@matter/main';
+import { Environment, Logger, StorageService, Crypto } from '@matter/main';
 import { ManualPairingCodeCodec } from '@matter/main/types';
 import { OnOffClient } from '@matter/main/behaviors/on-off';
 import { FanControlClient } from '@matter/main/behaviors/fan-control';
@@ -12,6 +12,16 @@ import { ThermostatClient } from '@matter/main/behaviors/thermostat';
 import { TemperatureMeasurementClient } from '@matter/main/behaviors/temperature-measurement';
 
 import { CommissioningController } from '@project-chip/matter.js';
+
+import { Ccm } from '../node_modules/@matter/general/dist/esm/crypto/aes/Ccm.js';
+import { Bytes } from '../node_modules/@matter/general/dist/esm/util/Bytes.js';
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  if (reason && reason.stack) {
+    console.error(reason.stack);
+  }
+});
 
 // Define __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -48,6 +58,10 @@ Logger.log = (level, facility, message) => {
     } else {
       levelStr = String(level).toLowerCase();
     }
+  }
+  // Ignore verbose debug logs to prevent performance lag on the UI thread
+  if (levelStr === 'debug') {
+    return;
   }
   sendLog(`[${facility}] ${message}`, levelStr);
 };
@@ -89,12 +103,10 @@ let lastState = {
   light2: false,
   light3: false,
   fanPower: false,
-  fanSpeed: 0,
   acPower: false,
   acTemp: 24,
   acFanSpeed: 'auto',
-  onboardLed: false,
-  ambientTemp: 25.5
+  onboardLed: false
 };
 
 function sendStateUpdate() {
@@ -109,6 +121,45 @@ async function initMatter() {
     sendLog('Initializing Matter Controller Stack...');
     
     const environment = Environment.default;
+
+    // Monkey-patch Crypto computeHash to handle Electron BoringSSL algorithm naming quirk ("SHA-256" -> "sha256")
+    const matterCrypto = environment.get(Crypto);
+    if (matterCrypto) {
+      const originalComputeHash = matterCrypto.computeHash;
+      matterCrypto.computeHash = function (data, algorithm = "SHA-256") {
+        let normalizedAlg = algorithm;
+        if (algorithm === "SHA-256") {
+          normalizedAlg = "sha256";
+        } else if (algorithm === "SHA-384") {
+          normalizedAlg = "sha384";
+        } else if (algorithm === "SHA-512") {
+          normalizedAlg = "sha512";
+        }
+        return originalComputeHash.call(this, data, normalizedAlg);
+      };
+
+      // Monkey-patch encrypt and decrypt to use pure-JavaScript AES-CCM implementation (Ccm)
+      // to avoid Electron's BoringSSL "Unknown cipher" error for "aes-128-ccm".
+      matterCrypto.encrypt = function (key, data, nonce, associatedData) {
+        const ccm = Ccm(key);
+        return ccm.encrypt({
+          pt: Bytes.of(data),
+          nonce: Bytes.of(nonce),
+          adata: associatedData !== void 0 ? Bytes.of(associatedData) : void 0
+        });
+      };
+
+      matterCrypto.decrypt = function (key, data, nonce, associatedData) {
+        const ccm = Ccm(key);
+        return ccm.decrypt({
+          ct: Bytes.of(data),
+          nonce: Bytes.of(nonce),
+          adata: associatedData !== void 0 ? Bytes.of(associatedData) : void 0
+        });
+      };
+
+      sendLog('Successfully patched Matter Crypto computeHash and AES-CCM ciphers for Electron BoringSSL support.');
+    }
     
     // Set custom storage path to Electron userData directory
     const storagePath = path.join(app.getPath('userData'), 'matter-store');
@@ -126,7 +177,7 @@ async function initMatter() {
         environment,
         id: uniqueId,
       },
-      autoConnect: true,
+      autoConnect: false,
       adminFabricLabel: 'Ryaan Laptop Basestation'
     });
 
@@ -144,6 +195,15 @@ async function initMatter() {
     }
   } catch (err) {
     sendLog(`Failed to initialize Matter: ${err.message}`, 'error');
+    let currentCause = err.cause;
+    while (currentCause) {
+      sendLog(`Root Cause: ${currentCause.message}`, 'error');
+      if (currentCause.stack) {
+        console.error('Root Cause Stack:', currentCause.stack);
+      }
+      currentCause = currentCause.cause;
+    }
+    console.error(err.stack);
   }
 }
 
@@ -164,7 +224,7 @@ async function connectToPairedNode() {
     // Watch node state changes
     pairedNode.events.stateChanged.on(state => {
       sendLog(`Node connection state changed: ${state}`);
-      lastState.connected = (state === 'Connected' || state === 1); // connected state
+      lastState.connected = (state === 'Connected' || state === 0); // Connected state is 0, Disconnected is 1
       sendStateUpdate();
     });
 
@@ -218,9 +278,6 @@ function mapNodeAttributes() {
     if (ep4) {
       const onOff = ep4.stateOf(OnOffClient);
       lastState.fanPower = onOff.onOff;
-
-      const fanControl = ep4.stateOf(FanControlClient);
-      lastState.fanSpeed = fanControl.percentSetting || 0;
     }
 
     // AC Thermostat (Endpoint 5)
@@ -249,13 +306,6 @@ function mapNodeAttributes() {
       lastState.onboardLed = state.onOff;
     }
 
-    // Temperature Sensor (Endpoint 8)
-    const ep8 = pairedNode.parts.get(8);
-    if (ep8) {
-      const temp = ep8.stateOf(TemperatureMeasurementClient);
-      lastState.ambientTemp = temp.measuredValue ? (temp.measuredValue / 100) : 25.5;
-    }
-
     sendStateUpdate();
   } catch (err) {
     sendLog(`Error reading node state: ${err.message}`, 'error');
@@ -275,7 +325,6 @@ function subscribeNodeAttributes() {
       lastState.light3 = value;
     } else if (endpointId === 4) {
       if (attributeName === 'onOff') lastState.fanPower = value;
-      if (attributeName === 'percentSetting') lastState.fanSpeed = value;
     } else if (endpointId === 5) {
       if (attributeName === 'systemMode') lastState.acPower = (value !== 0);
       if (attributeName === 'occupiedCoolingSetpoint') lastState.acTemp = value / 100;
@@ -286,8 +335,6 @@ function subscribeNodeAttributes() {
       else lastState.acFanSpeed = 'auto';
     } else if (endpointId === 7 && attributeName === 'onOff') {
       lastState.onboardLed = value;
-    } else if (endpointId === 8 && attributeName === 'measuredValue') {
-      lastState.ambientTemp = value / 100;
     }
 
     sendLog(`Attribute Changed: Endpoint ${endpointId} -> ${attributeName} set to ${value}`);
@@ -346,7 +393,10 @@ ipcMain.on('matter:commission', async (event, pairingCode) => {
 
 // Device Control IPCs
 ipcMain.on('matter:control:relay', async (event, { channel, state }) => {
-  if (!pairedNode) return;
+  if (!pairedNode || !lastState.connected) {
+    sendLog(`Cannot toggle relay: Device is offline`, 'warn');
+    return;
+  }
   try {
     let endpointId;
     if (channel === 0) endpointId = 1;      // Light 1
@@ -370,57 +420,43 @@ ipcMain.on('matter:control:relay', async (event, { channel, state }) => {
   }
 });
 
-ipcMain.on('matter:control:fanSpeed', async (event, percent) => {
-  if (!pairedNode) return;
-  try {
-    const ep = pairedNode.parts.get(4); // Fan is Endpoint 4
-    if (ep) {
-      const commands = ep.commandsOf(OnOffClient);
-      const fanCommands = ep.commandsOf(FanControlClient);
-      
-      sendLog(`Setting Fan Speed to ${percent}%`);
-      
-      // If speed > 0, ensure fan is ON
-      if (percent > 0) {
-        await commands.on();
-        await fanCommands.percentSetting(percent);
-      } else {
-        await commands.off();
-      }
-    }
-  } catch (err) {
-    sendLog(`Control error (fan speed): ${err.message}`, 'error');
-  }
-});
+
 
 ipcMain.on('matter:control:ac', async (event, state) => {
-  if (!pairedNode) return;
+  if (!pairedNode || !lastState.connected) {
+    sendLog(`Cannot control AC: Device is offline`, 'warn');
+    return;
+  }
   try {
-    const epAc = pairedNode.parts.get(5); // AC is Endpoint 5
-    const epAcFan = pairedNode.parts.get(6); // AC Fan is Endpoint 6
-
-    if (state.power !== undefined && epAc) {
-      const thermoCommands = epAc.commandsOf(ThermostatClient);
-      sendLog(`Setting AC Power: ${state.power ? 'ON (Cool Mode)' : 'OFF'}`);
-      
-      // systemMode: Off=0, Cool=3
-      await epAc.setSystemModeAttribute(state.power ? 3 : 0);
+    if (state.power !== undefined) {
+      const thermo = pairedNode.getClusterClientForDevice(5, ThermostatClient.cluster);
+      if (thermo) {
+        sendLog(`Setting AC Power: ${state.power ? 'ON (Cool Mode)' : 'OFF'}`);
+        // systemMode: Off=0, Cool=3
+        await thermo.attributes.systemMode.set(state.power ? 3 : 0);
+      }
     }
 
-    if (state.temp !== undefined && epAc) {
-      sendLog(`Setting AC Target Temp: ${state.temp}°C`);
-      // occupiedCoolingSetpoint is in °C * 100
-      await epAc.setOccupiedCoolingSetpointAttribute(state.temp * 100);
+    if (state.temp !== undefined) {
+      const thermo = pairedNode.getClusterClientForDevice(5, ThermostatClient.cluster);
+      if (thermo) {
+        sendLog(`Setting AC Target Temp: ${state.temp}°C`);
+        // occupiedCoolingSetpoint is in °C * 100
+        await thermo.attributes.occupiedCoolingSetpoint.set(state.temp * 100);
+      }
     }
 
-    if (state.fanSpeed !== undefined && epAcFan) {
-      sendLog(`Setting AC Fan Speed: ${state.fanSpeed}`);
-      let modeVal = 5; // Auto
-      if (state.fanSpeed === 'low') modeVal = 1;
-      else if (state.fanSpeed === 'medium') modeVal = 2;
-      else if (state.fanSpeed === 'high') modeVal = 3;
-      
-      await epAcFan.setFanModeAttribute(modeVal);
+    if (state.fanSpeed !== undefined) {
+      const fan = pairedNode.getClusterClientForDevice(6, FanControlClient.cluster);
+      if (fan) {
+        sendLog(`Setting AC Fan Speed: ${state.fanSpeed}`);
+        let modeVal = 5; // Auto
+        if (state.fanSpeed === 'low') modeVal = 1;
+        else if (state.fanSpeed === 'medium') modeVal = 2;
+        else if (state.fanSpeed === 'high') modeVal = 3;
+        
+        await fan.attributes.fanMode.set(modeVal);
+      }
     }
   } catch (err) {
     sendLog(`Control error (AC): ${err.message}`, 'error');
@@ -446,12 +482,10 @@ ipcMain.on('matter:decommission', async () => {
       light2: false,
       light3: false,
       fanPower: false,
-      fanSpeed: 0,
       acPower: false,
       acTemp: 24,
       acFanSpeed: 'auto',
-      onboardLed: false,
-      ambientTemp: 25.5
+      onboardLed: false
     };
     
     sendStateUpdate();

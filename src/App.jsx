@@ -10,12 +10,10 @@ export default function App() {
     light2: false,
     light3: false,
     fanPower: false,
-    fanSpeed: 0,
     acPower: false,
     acTemp: 24,
     acFanSpeed: 'auto',
-    onboardLed: false,
-    ambientTemp: 25.5
+    onboardLed: false
   });
 
   const [logs, setLogs] = useState([]);

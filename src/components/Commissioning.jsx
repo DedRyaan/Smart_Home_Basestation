@@ -61,22 +61,38 @@ export default function Commissioning({ onCommissionSuccess }) {
           <div style={{ 
             margin: '0 0 24px 0', 
             padding: '16px', 
-            borderRadius: '8px', 
-            background: 'rgba(0, 242, 254, 0.04)', 
-            border: '1px solid rgba(0, 242, 254, 0.2)',
+            borderRadius: '6px', 
+            background: 'rgba(229, 193, 133, 0.03)', 
+            border: '1px solid rgba(229, 193, 133, 0.15)',
             textAlign: 'left'
           }}>
-            <h4 style={{ color: '#00f2fe', fontSize: '14px', marginBottom: '4px', fontFamily: 'Outfit' }}>
+            <h4 style={{ color: '#e5c185', fontSize: '12px', fontWeight: '600', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               📡 Discovered Device
             </h4>
-            <p style={{ fontSize: '13px', color: '#f8fafc' }}>
+            <p style={{ fontSize: '13px', color: '#f1f1f5' }}>
               <strong>Name:</strong> {discoveredDevice.name}
             </p>
-            <p style={{ fontSize: '12px', color: '#94a3b8' }}>
+            <p style={{ fontSize: '12px', color: '#a0a0b0' }}>
               <strong>Discriminator:</strong> {discoveredDevice.discriminator}
             </p>
           </div>
         )}
+
+        <div className="alexa-help-box">
+          <div className="help-header">
+            <span>🔗 Connected to Alexa already?</span>
+          </div>
+          <p className="help-content">
+            Matter supports <strong>Multi-Admin</strong> natively! You can control this module from both Alexa and your laptop:
+          </p>
+          <ol className="help-steps" style={{ textAlign: 'left', listStylePosition: 'inside' }}>
+            <li>Open the <strong>Alexa App</strong> on your phone.</li>
+            <li>Go to <strong>Devices</strong> &rarr; select your Smart Home module.</li>
+            <li>Tap the <strong>Settings (gear)</strong> &rarr; select <strong>Other Assistants and Apps</strong>.</li>
+            <li>Tap <strong>Add Another</strong> to generate a temporary Manual Pairing Code.</li>
+            <li>Enter that 11-digit code in the field below!</li>
+          </ol>
+        </div>
 
         <form onSubmit={handleSubmit}>
           <div className="input-group">
